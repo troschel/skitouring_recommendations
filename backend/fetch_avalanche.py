@@ -3,8 +3,12 @@ Lawinenbulletin vom SLF (WSL Institut für Schnee- und Lawinenforschung)
 API: https://aws.slf.ch/api/bulletin/caaml/de/json
 """
 
+import json
+import os
 import requests
 from datetime import datetime
+
+_FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "bulletin_2026-03-18.json")
 
 DANGER_LABELS = {
     "low":         {"de": "Gering",      "level": 1, "color": "#4CAF50"},
@@ -49,7 +53,7 @@ def get_avalanche_bulletin() -> list[dict]:
                 "valid_until":  bulletin.get("validTime", {}).get("endTime", ""),
                 "avalanche_problem": _extract_problem(bulletin),
             })
-    return regions
+    return regions if regions else _fallback_regions()
 
 
 def _extract_problem(bulletin: dict) -> str:
@@ -67,13 +71,32 @@ def _extract_problem(bulletin: dict) -> str:
 
 
 def _fallback_regions() -> list[dict]:
-    """Fallback-Daten wenn die API nicht erreichbar ist (z.B. Sommer)."""
-    return [
-        {"region_id": "CH-7", "region_name": "Berner Oberland",    "danger_key": "moderate",     "danger_level": 2, "danger_de": "Mässig",    "danger_color": "#FFEB3B", "valid_until": "", "avalanche_problem": "Triebschnee"},
-        {"region_id": "CH-8", "region_name": "Wallis",              "danger_key": "considerable", "danger_level": 3, "danger_de": "Erheblich", "danger_color": "#FF9800", "valid_until": "", "avalanche_problem": "Altschnee"},
-        {"region_id": "CH-9", "region_name": "Graubünden",          "danger_key": "low",          "danger_level": 1, "danger_de": "Gering",    "danger_color": "#4CAF50", "valid_until": "", "avalanche_problem": "Keine Angabe"},
-        {"region_id": "CH-1", "region_name": "Zentralschweiz",      "danger_key": "moderate",     "danger_level": 2, "danger_de": "Mässig",    "danger_color": "#FFEB3B", "valid_until": "", "avalanche_problem": "Neuschnee"},
-    ]
+    """Lädt Beispieldaten aus dem lokalen Fixture-Bulletin (z.B. im Sommer)."""
+    with open(_FIXTURE_PATH, encoding="utf-8") as f:
+        data = json.load(f)
+
+    regions = []
+    for bulletin in data.get("bulletins", []):
+        danger_ratings = bulletin.get("dangerRatings", [])
+        if not danger_ratings:
+            continue
+        main_danger = danger_ratings[0].get("mainValue", "moderate")
+        for dr in danger_ratings:
+            d = dr.get("mainValue", "moderate")
+            if DANGER_LABELS.get(d, {}).get("level", 0) > DANGER_LABELS.get(main_danger, {}).get("level", 0):
+                main_danger = d
+        for region in bulletin.get("regions", []):
+            regions.append({
+                "region_id":    region.get("regionID", ""),
+                "region_name":  region.get("name", "Unbekannt"),
+                "danger_key":   main_danger,
+                "danger_level": DANGER_LABELS.get(main_danger, {}).get("level", 3),
+                "danger_de":    DANGER_LABELS.get(main_danger, {}).get("de", "Erheblich"),
+                "danger_color": DANGER_LABELS.get(main_danger, {}).get("color", "#FF9800"),
+                "valid_until":  bulletin.get("validTime", {}).get("endTime", ""),
+                "avalanche_problem": _extract_problem(bulletin),
+            })
+    return regions
 
 
 def get_region_names(regions: list[dict]) -> list[str]:
