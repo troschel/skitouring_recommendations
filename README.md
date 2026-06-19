@@ -25,7 +25,7 @@ A Streamlit app that recommends Swiss ski touring and snowshoeing routes based o
 ## Setup
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/troschel/skitouring_recommendations.git
 cd skitouring_recommendations
 python -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
