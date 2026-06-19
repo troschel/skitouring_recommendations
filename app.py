@@ -1,8 +1,11 @@
 import streamlit as st
-import streamlit.components.v1 as components
+import folium
+from streamlit_folium import st_folium
 from backend.fetch_avalanche import get_avalanche_bulletin, get_region_names
 from backend.fetch_weather import get_weather
 from backend.recommender import TourInput, recommend, SKI_DIFFICULTY_INFO, SNOWSHOE_DIFFICULTY_INFO
+from backend.fetch_routes import get_ski_routes, get_snowshoe_routes
+from backend.geometry import get_ski_geometries, get_snow_geometries, lv95_to_wgs84
 
 # Approximate LV95 (EPSG:2056) center coordinates per region
 REGION_COORDS = {
@@ -206,26 +209,101 @@ st.divider()
 st.subheader(f"Karte – {selected_region}")
 
 easting, northing = REGION_COORDS.get(selected_region, (2660000, 1190000))
+center_lon, center_lat = lv95_to_wgs84(easting, northing)
 
-WINTER_BASE = "ch.swisstopo.pixelkarte-farbe-winter,t,1"
-COMMON_LAYERS = (
-    "ch.swisstopo.hangneigung-ueber_30,t,0.5"
-    ";ch.bafu.wrz-wildruhezonen_portal,t,0.7"
-    ";ch.bafu.wrz-jagdbanngebiete_select,t,0.7"
-)
+# Fetch geometries for the displayed routes
+if activity == "skitouring":
+    map_routes = get_ski_routes(selected_region, difficulty)
+    fids = [r["fid"] for r in map_routes]
+    geom_map = get_ski_geometries(fids)
+    route_layer_id = "ch.swisstopo-karto.skitouren"
+    extra_layer_id = "ch.swisstopo.bahnen-winter"
+    extra_layer_name = "Bahnen & Skilifte"
+else:
+    map_routes = get_snowshoe_routes(selected_region, difficulty)
+    fids = [r["fid"] for r in map_routes]
+    geom_map = get_snow_geometries(fids)
+    route_layer_id = "ch.swisstopo-karto.schneeschuhrouten"
+    extra_layer_id = None
+    extra_layer_name = None
+
+def wmts(layer, ext="png"):
+    return f"https://wmts.geo.admin.ch/1.0.0/{layer}/default/current/3857/{{z}}/{{x}}/{{y}}.{ext}"
+
+m = folium.Map(location=[center_lat, center_lon], zoom_start=10, tiles=None)
+
+folium.TileLayer(wmts("ch.swisstopo.pixelkarte-farbe-winter", "jpeg"),
+    attr="© swisstopo", name="Swisstopo Winter").add_to(m)
+folium.TileLayer(wmts(route_layer_id),
+    attr="© swisstopo", name="Routen", overlay=True).add_to(m)
+folium.TileLayer(wmts("ch.swisstopo.hangneigung-ueber_30"),
+    attr="© swisstopo", name="Hangneigung ≥30°", overlay=True, opacity=0.5).add_to(m)
+folium.TileLayer(wmts("ch.bafu.wrz-wildruhezonen_portal"),
+    attr="© BAFU", name="Wildruhezonen", overlay=True, opacity=0.65).add_to(m)
+if extra_layer_id:
+    folium.TileLayer(wmts(extra_layer_id),
+        attr="© swisstopo", name=extra_layer_name, overlay=True).add_to(m)
+
+# Highlighted suggested routes
+for r in map_routes:
+    coords = geom_map.get(r["fid"], [])
+    if not coords:
+        continue
+    label = r.get("target") or r.get("name", "")
+    folium.PolyLine(
+        locations=[[c[1], c[0]] for c in coords],  # folium: [lat, lon]
+        color="#FF5000",
+        weight=4,
+        opacity=0.9,
+        tooltip=f"{label} – {r['difficulty']}",
+    ).add_to(m)
+
+folium.LayerControl().add_to(m)
+st_folium(m, use_container_width=True, height=500, returned_objects=[])
+
+st.divider()
+
+# ── Passende Routen ────────────────────────────────────────────────────────────
 
 if activity == "skitouring":
-    layers = f"{WINTER_BASE};ch.swisstopo-karto.skitouren,t,1;ch.swisstopo.bahnen-winter,t,1;{COMMON_LAYERS}"
+    st.subheader(f"Passende Skitouren – {selected_region}")
+    routes = get_ski_routes(selected_region, difficulty)
+    if not routes:
+        st.info("Keine Routen für diese Region und Schwierigkeitsstufe gefunden.")
+    else:
+        st.caption(
+            f"{len(routes)} Route(n) bis **{difficulty_info[difficulty]['label']}** "
+            f"in {selected_region} (sortiert nach Schwierigkeit)"
+        )
+        for r in routes:
+            with st.expander(f"**{r['target']}** – {r['name']} · {r['difficulty']}"):
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Schwierigkeit", r["difficulty"])
+                col2.metric("Aufstieg", f"{r['ascent_m']} m" if r["ascent_m"] else "–")
+                col3.metric("Gipfel", f"{r['target_alt']} m" if r["target_alt"] else "–")
+                st.write(f"⏱️ {r['time']}" if r["time"] else "")
+                if r["url"]:
+                    st.markdown(f"[SAC Tourenportal ↗]({r['url']})")
+
 else:
-    layers = f"{WINTER_BASE};ch.swisstopo-karto.schneeschuhrouten,t,1;{COMMON_LAYERS}"
-
-map_url = (
-    f"https://map.geo.admin.ch/#/embed"
-    f"?lang=de"
-    f"&center={easting},{northing}"
-    f"&z=9"
-    f"&layers={layers}"
-    f"&bgLayer=void"
-)
-
-components.iframe(map_url, height=500)
+    st.subheader(f"Passende Schneeschuhtouren – {selected_region}")
+    routes = get_snowshoe_routes(selected_region, difficulty)
+    if not routes:
+        st.info("Keine Routen für diese Region und Schwierigkeitsstufe gefunden.")
+    else:
+        st.caption(
+            f"{len(routes)} Route(n) bis **{difficulty_info[difficulty]['label']}** "
+            f"in {selected_region} (sortiert nach Schwierigkeit)"
+        )
+        for r in routes:
+            label = f"**{r['name']}** · {r['difficulty']} ({r['diff_color']})"
+            with st.expander(label):
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Schwierigkeit", f"{r['difficulty']} ({r['diff_color']})")
+                col2.metric("Aufstieg", f"{r['ascent_m']} m" if r["ascent_m"] else "–")
+                col3.metric("Distanz", f"{r['length_km']} km" if r["length_km"] else "–")
+                if r["start"] or r["end"]:
+                    st.write(f"📍 {r['start']} → {r['end']}" if r["start"] != r["end"] else f"📍 {r['start']}")
+                st.write(f"⏱️ {r['time']}" if r["time"] else "")
+                if r["url"]:
+                    st.markdown(f"[SchweizMobil ↗]({r['url']})")
