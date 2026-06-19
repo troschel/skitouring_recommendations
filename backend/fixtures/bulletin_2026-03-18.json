@@ -1,0 +1,135 @@
+{
+  "_source": "Derived from SLF PDF bulletin 2026-03-18 17:00 (Bulletin_2026-03-18_17-00_de.pdf). Zone-to-region mapping is approximate.",
+  "bulletins": [
+    {
+      "_zone": "A – Nordalpen Ost, erheblich 3- oben / mässig 2 unten (>2200m)",
+      "validTime": { "endTime": "2026-03-19T17:00:00+01:00" },
+      "dangerRatings": [
+        { "mainValue": "considerable", "elevation": { "lowerBound": "2200" } },
+        { "mainValue": "moderate",     "elevation": { "upperBound": "2200" } }
+      ],
+      "avalancheProblems": [
+        { "problemType": "wind_slab" },
+        { "problemType": "wet_snow" }
+      ],
+      "regions": [
+        { "regionID": "CH-3211", "name": "Glarner Alpen" },
+        { "regionID": "CH-3212", "name": "Toggenburger und Appenzeller Alpen" },
+        { "regionID": "CH-3213", "name": "Schwyzer Alpen" }
+      ]
+    },
+    {
+      "_zone": "B – Nordalpen West / Berner Oberland, erheblich 3- oben / mässig 2 unten (>2600m)",
+      "validTime": { "endTime": "2026-03-19T17:00:00+01:00" },
+      "dangerRatings": [
+        { "mainValue": "considerable", "elevation": { "lowerBound": "2600" } },
+        { "mainValue": "moderate",     "elevation": { "upperBound": "2600" } }
+      ],
+      "avalancheProblems": [
+        { "problemType": "wind_slab" },
+        { "problemType": "wet_snow" }
+      ],
+      "regions": [
+        { "regionID": "CH-3111", "name": "Berner Oberland" },
+        { "regionID": "CH-3112", "name": "Urner Alpen" },
+        { "regionID": "CH-3113", "name": "Nidwaldner und Obwaldner Alpen" }
+      ]
+    },
+    {
+      "_zone": "C – Inneralpen Wallis/Graubünden, erheblich 3- oben / mässig 2 unten (>2200m), Altschnee-Schwachschichten",
+      "validTime": { "endTime": "2026-03-19T17:00:00+01:00" },
+      "dangerRatings": [
+        { "mainValue": "considerable", "elevation": { "lowerBound": "2200" } },
+        { "mainValue": "moderate",     "elevation": { "upperBound": "2200" } }
+      ],
+      "avalancheProblems": [
+        { "problemType": "wind_slab" },
+        { "problemType": "persistent_weak_layers" }
+      ],
+      "regions": [
+        { "regionID": "CH-1211", "name": "Westliche Walliser Alpen" },
+        { "regionID": "CH-1212", "name": "Östliche Walliser Alpen" },
+        { "regionID": "CH-3311", "name": "Mittelbünden" }
+      ]
+    },
+    {
+      "_zone": "D – Nordbünden, mässig 2+ oben / mässig 2 unten (>2000m)",
+      "validTime": { "endTime": "2026-03-19T17:00:00+01:00" },
+      "dangerRatings": [
+        { "mainValue": "moderate", "elevation": { "lowerBound": "2000" } },
+        { "mainValue": "moderate", "elevation": { "upperBound": "2000" } }
+      ],
+      "avalancheProblems": [
+        { "problemType": "wind_slab" },
+        { "problemType": "wet_snow" }
+      ],
+      "regions": [
+        { "regionID": "CH-3312", "name": "Nördliches Bünden" },
+        { "regionID": "CH-3313", "name": "Südliches Bünden" }
+      ]
+    },
+    {
+      "_zone": "E – Engadin / Bergell, mässig 2+ oben / mässig 2 unten, Triebschnee + Altschnee",
+      "validTime": { "endTime": "2026-03-19T17:00:00+01:00" },
+      "dangerRatings": [
+        { "mainValue": "moderate", "elevation": { "lowerBound": "2200" } },
+        { "mainValue": "moderate", "elevation": { "upperBound": "2200" } }
+      ],
+      "avalancheProblems": [
+        { "problemType": "wind_slab" },
+        { "problemType": "persistent_weak_layers" }
+      ],
+      "regions": [
+        { "regionID": "CH-3321", "name": "Engadin und Val Müstair" },
+        { "regionID": "CH-3322", "name": "Bergell und Puschlav" }
+      ]
+    },
+    {
+      "_zone": "F – Voralpen / Préalpes, mässig 2+ oben / mässig 2 unten, Triebschnee + Altschnee",
+      "validTime": { "endTime": "2026-03-19T17:00:00+01:00" },
+      "dangerRatings": [
+        { "mainValue": "moderate", "elevation": { "lowerBound": "2000" } },
+        { "mainValue": "moderate", "elevation": { "upperBound": "2000" } }
+      ],
+      "avalancheProblems": [
+        { "problemType": "wind_slab" },
+        { "problemType": "persistent_weak_layers" }
+      ],
+      "regions": [
+        { "regionID": "CH-3121", "name": "Berner Voralpen" },
+        { "regionID": "CH-3122", "name": "Préalpes fribourgeoises et vaudoises" },
+        { "regionID": "CH-1221", "name": "Unterwallis" }
+      ]
+    },
+    {
+      "_zone": "G – Jura / westliche Voralpen, mässig 2- oben (>1600m) / gering 1 unten",
+      "validTime": { "endTime": "2026-03-19T17:00:00+01:00" },
+      "dangerRatings": [
+        { "mainValue": "moderate", "elevation": { "lowerBound": "1600" } },
+        { "mainValue": "low",      "elevation": { "upperBound": "1600" } }
+      ],
+      "avalancheProblems": [
+        { "problemType": "wind_slab" },
+        { "problemType": "gliding_snow" }
+      ],
+      "regions": [
+        { "regionID": "CH-2111", "name": "Jura" },
+        { "regionID": "CH-2112", "name": "Alpes vaudoises" }
+      ]
+    },
+    {
+      "_zone": "H – Tessin, gering 1",
+      "validTime": { "endTime": "2026-03-19T17:00:00+01:00" },
+      "dangerRatings": [
+        { "mainValue": "low" }
+      ],
+      "avalancheProblems": [
+        { "problemType": "gliding_snow" }
+      ],
+      "regions": [
+        { "regionID": "CH-4111", "name": "Sopraceneri" },
+        { "regionID": "CH-4112", "name": "Sottoceneri" }
+      ]
+    }
+  ]
+}
