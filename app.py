@@ -37,7 +37,7 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("⛷️ Schweizer Skitouren-Empfehlungen")
+st.title("Schweizer Skitouren-Empfehlungen")
 st.caption("Aktuelle Lawinenbulletins, Wetter und SAC-Schwierigkeitsgrade kombiniert.")
 
 # ── Daten laden ────────────────────────────────────────────────────────────────
@@ -92,7 +92,7 @@ with st.sidebar:
     )
 
     st.divider()
-    if st.button("🔄 Daten aktualisieren", use_container_width=True):
+    if st.button("Daten aktualisieren", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
@@ -136,9 +136,9 @@ with st.expander("3-Tages-Wettervorschau"):
             label = "Heute" if i == 0 else ("Morgen" if i == 1 else "Übermorgen")
             with col:
                 st.markdown(f"**{label}** ({day['date']})")
-                st.write(f"❄️ Schnee: {day['snowfall_cm']} cm")
-                st.write(f"💨 Wind: {day['wind_max_kmh']:.0f} km/h")
-                st.write(f"🌡️ {day['temp_min']}° / {day['temp_max']}°C")
+                st.write(f"Schnee: {day['snowfall_cm']} cm")
+                st.write(f"Wind: {day['wind_max_kmh']:.0f} km/h")
+                st.write(f"{day['temp_min']}° / {day['temp_max']}°C")
 
 # Lawinenproblem
 problem = region_data.get("avalanche_problem", "Keine Angabe")
@@ -187,18 +187,18 @@ col_pos, col_neg = st.columns(2)
 
 with col_pos:
     if result.reasons_pos:
-        st.markdown("**✅ Positive Faktoren**")
+        st.markdown("**Positive Faktoren**")
         for r in result.reasons_pos:
             st.markdown(f"- {r}")
 
 with col_neg:
     if result.reasons_neg:
-        st.markdown("**⚠️ Warnungen**")
+        st.markdown("**Warnungen**")
         for r in result.reasons_neg:
             st.markdown(f"- {r}")
 
 if result.tips:
-    with st.expander("🛡️ Sicherheitstipps"):
+    with st.expander("Sicherheitstipps"):
         for tip in result.tips:
             st.markdown(f"- {tip}")
 

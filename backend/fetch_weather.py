@@ -4,6 +4,9 @@ https://api.open-meteo.com
 """
 
 import requests
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Koordinaten bekannter Skigebiete/Regionen in der Schweiz
 REGION_COORDS = {
@@ -38,7 +41,7 @@ def get_weather(region_name: str = None, lat: float = None, lon: float = None) -
     )
 
     try:
-        r = requests.get(url, timeout=10)
+        r = requests.get(url, timeout=10, verify=False)
         r.raise_for_status()
         data = r.json()["daily"]
         return _parse_weather(data)
