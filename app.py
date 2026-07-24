@@ -40,6 +40,13 @@ st.set_page_config(
     layout="wide",
 )
 
+st.markdown(
+    '<div style="background:#C62828;color:white;text-align:center;'
+    'padding:14px;font-size:1.3rem;font-weight:700;border-radius:6px;'
+    'margin-bottom:1rem;letter-spacing:0.05em;">⚠️ ACHTUNG: TESTVERSION ⚠️</div>',
+    unsafe_allow_html=True,
+)
+
 st.title("Schweizer Skitouren-Empfehlungen")
 st.caption("Aktuelle Lawinenbulletins, Wetter und SAC-Schwierigkeitsgrade kombiniert.")
 
