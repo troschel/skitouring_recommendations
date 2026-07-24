@@ -8,20 +8,31 @@ import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Koordinaten bekannter Skigebiete/Regionen in der Schweiz
+# WGS84 (lat, lon) centres — derived from LV95 REGION_COORDS in app.py
 REGION_COORDS = {
-    "Berner Oberland": (46.55, 7.95),
-    "Wallis":          (46.10, 7.70),
-    "Graubünden":      (46.65, 9.70),
-    "Zentralschweiz":  (46.80, 8.50),
-    "Jura":            (47.10, 7.00),
-    "Tessin":          (46.30, 8.95),
-    "Uri":             (46.75, 8.65),
-    "Glarus":          (46.90, 9.10),
-    "Appenzell":       (47.33, 9.41),
+    "Glarner Alpen":                        (46.97567, 9.05523),
+    "Toggenburger und Appenzeller Alpen":   (47.24270, 9.24826),
+    "Schwyzer Alpen":                       (47.06977, 8.72888),
+    "Berner Oberland":                      (46.58119, 7.93440),
+    "Urner Alpen":                          (46.81946, 8.57872),
+    "Nidwaldner und Obwaldner Alpen":       (46.92092, 8.29202),
+    "Westliche Walliser Alpen":             (46.15047, 7.38686),
+    "Östliche Walliser Alpen":              (46.19421, 7.96974),
+    "Mittelbünden":                         (46.62379, 9.12306),
+    "Nördliches Bünden":                    (46.85890, 9.58954),
+    "Südliches Bünden":                     (46.43056, 9.39034),
+    "Engadin und Val Müstair":              (46.58712, 10.10087),
+    "Bergell und Puschlav":                 (46.29729, 9.77504),
+    "Berner Voralpen":                      (46.77930, 7.88384),
+    "Préalpes fribourgeoises et vaudoises": (46.71708, 7.26861),
+    "Unterwallis":                          (46.18560, 6.99828),
+    "Jura":                                 (47.14782, 6.92444),
+    "Alpes vaudoises":                      (46.39265, 7.03561),
+    "Sopraceneri":                          (46.25039, 8.78727),
+    "Sottoceneri":                          (45.89767, 8.93321),
 }
 
-DEFAULT_COORDS = (46.55, 7.95)  # Berner Oberland als Fallback
+DEFAULT_COORDS = (46.58119, 7.93440)  # Berner Oberland als Fallback
 
 
 def get_weather(region_name: str = None, lat: float = None, lon: float = None) -> dict:
