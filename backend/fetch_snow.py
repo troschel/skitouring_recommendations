@@ -1,9 +1,11 @@
 """
-Snow height data from the SLF IMIS measurement network.
-Uses SNOW_FLAT stations (flat-field sensors) nearest to the region centre.
-API: https://measurement-api.slf.ch
+Snow height data from two sources:
 
-period_in_days: 1, 3, or 7 (API constraint).
+1. SLF IMIS (live):   measurement-api.slf.ch  — SNOW_FLAT stations, last 1/3/7 days
+2. Open-Meteo archive: archive-api.open-meteo.com — ERA5 reanalysis, any date range
+
+get_snow_height()          live IMIS measurements
+get_historical_snow()      Open-Meteo archive for any start/end date
 """
 
 import math
@@ -138,3 +140,60 @@ def get_snow_height(
     except Exception as e:
         print(f"[fetch_snow] Fehler: {e}")
         return {"hs_cm": None, "stations": [], "n_with_data": 0, "history": []}
+
+
+_ARCHIVE_BASE = "https://archive-api.open-meteo.com/v1/archive"
+
+
+def get_historical_snow(
+    lat: float,
+    lon: float,
+    start_date: str,
+    end_date: str,
+) -> dict:
+    """
+    Fetch historical snow depth from the Open-Meteo ERA5 archive.
+
+    start_date / end_date: ISO strings "YYYY-MM-DD".
+    Archive is available up to ~5 days before today.
+
+    Returns a dict with:
+      hs_cm    — snow depth on end_date in cm (None if unavailable)
+      history  — list of {date, hs_cm, new_snow_cm} sorted ascending
+    """
+    try:
+        r = requests.get(
+            _ARCHIVE_BASE,
+            params={
+                "latitude":   lat,
+                "longitude":  lon,
+                "start_date": start_date,
+                "end_date":   end_date,
+                "daily":      "snow_depth_max,snowfall_sum",
+                "timezone":   "Europe/Zurich",
+            },
+            timeout=15,
+            verify=False,
+        )
+        r.raise_for_status()
+        daily = r.json()["daily"]
+
+        history = []
+        for date, depth_m, new_snow in zip(
+            daily["time"],
+            daily["snow_depth_max"],
+            daily["snowfall_sum"],
+        ):
+            hs = round(depth_m * 100, 1) if depth_m is not None else None
+            ns = round(new_snow, 1) if new_snow is not None else None
+            history.append({"date": date, "hs_cm": hs, "new_snow_cm": ns})
+
+        latest_hs = next(
+            (h["hs_cm"] for h in reversed(history) if h["hs_cm"] is not None),
+            None,
+        )
+        return {"hs_cm": latest_hs, "history": history}
+
+    except Exception as e:
+        print(f"[fetch_snow] Archiv-Fehler: {e}")
+        return {"hs_cm": None, "history": []}

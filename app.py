@@ -1,10 +1,11 @@
 import streamlit as st
 import folium
 import pandas as pd
+from datetime import date, timedelta
 from streamlit_folium import st_folium
 from backend.fetch_avalanche import get_avalanche_bulletin, get_region_names
 from backend.fetch_weather import get_weather
-from backend.fetch_snow import get_snow_height
+from backend.fetch_snow import get_snow_height, get_historical_snow
 from backend.recommender import TourInput, recommend, SKI_DIFFICULTY_INFO, SNOWSHOE_DIFFICULTY_INFO
 from backend.fetch_routes import get_ski_routes, get_snowshoe_routes
 from backend.geometry import get_ski_geometries, get_snow_geometries, lv95_to_wgs84
@@ -53,10 +54,16 @@ def load_weather(region_name: str):
     return get_weather(region_name)
 
 @st.cache_data(ttl=3600)
-def load_snow_height(region_name: str, period_in_days: int = 1) -> dict:
+def load_snow_height(region_name: str) -> dict:
     from backend.fetch_weather import REGION_COORDS
     lat, lon = REGION_COORDS.get(region_name, (46.58119, 7.93440))
-    return get_snow_height(lat, lon, period_in_days=period_in_days)
+    return get_snow_height(lat, lon)
+
+@st.cache_data(ttl=3600)
+def load_historical_snow(region_name: str, start: str, end: str) -> dict:
+    from backend.fetch_weather import REGION_COORDS
+    lat, lon = REGION_COORDS.get(region_name, (46.58119, 7.93440))
+    return get_historical_snow(lat, lon, start, end)
 
 with st.spinner("Lawinenbulletin wird geladen…"):
     regions = load_bulletin()
@@ -100,13 +107,20 @@ with st.sidebar:
     )
 
     st.divider()
-    snow_period = st.radio(
-        "Schneehöhe: Zeitraum",
-        options=[1, 3, 7],
-        format_func=lambda d: {1: "Heute", 3: "3 Tage", 7: "7 Tage"}[d],
-        horizontal=True,
-        help="Wie viele Tage historische IMIS-Schneehöhendaten anzeigen",
+    st.markdown("**Historische Schneehöhe (Archiv)**")
+    _archive_end_max = date.today() - timedelta(days=5)
+    _default_end = date(2025, 1, 20)
+    _default_start = date(2025, 1, 10)
+    snow_start = st.date_input(
+        "Von", value=_default_start, max_value=_archive_end_max,
+        help="Archiv verfügbar bis ca. 5 Tage vor heute",
     )
+    snow_end = st.date_input(
+        "Bis", value=_default_end, max_value=_archive_end_max,
+    )
+    if snow_end < snow_start:
+        st.warning("Enddatum muss nach Startdatum liegen.")
+        snow_end = snow_start
 
     st.divider()
     if st.button("Daten aktualisieren", use_container_width=True):
@@ -118,8 +132,13 @@ with st.sidebar:
 region_data = region_map[selected_region]
 weather = load_weather(selected_region)
 today = weather.get("today", {})
-snow_data = load_snow_height(selected_region, snow_period)
-hs_cm = snow_data["hs_cm"]
+snow_live = load_snow_height(selected_region)
+hist_data = load_historical_snow(
+    selected_region,
+    snow_start.isoformat(),
+    snow_end.isoformat(),
+)
+hs_cm = hist_data["hs_cm"] if hist_data["hs_cm"] is not None else snow_live["hs_cm"]
 
 st.subheader(f"Aktuelle Bedingungen – {selected_region}")
 
@@ -139,19 +158,11 @@ with col_av:
 with col_hs:
     if hs_cm is not None:
         hs_label = f"{hs_cm:.0f} cm"
-        hs_help = (
-            f"Median aus {snow_data['n_with_data']} IMIS-Stationen "
-            f"in der Nähe von {selected_region}:\n"
-            + "\n".join(
-                f"• {s['label']} ({s['elevation']:.0f} m, {s['dist_km']} km): "
-                + (f"{s['hs_cm']:.0f} cm" if s['hs_cm'] is not None else "keine Daten")
-                for s in snow_data["stations"]
-            )
-        )
+        hs_help = f"Letzte Archiv-Messung ({snow_end}) via Open-Meteo ERA5."
     else:
         hs_label = "Keine Daten"
-        hs_help = "Keine IMIS-Stationen in der Nähe liefern aktuell Schneehöhendaten."
-    st.metric("Schneehöhe (IMIS)", hs_label, help=hs_help)
+        hs_help = "Keine Archivdaten für den gewählten Zeitraum verfügbar."
+    st.metric("Schneehöhe (Archiv)", hs_label, help=hs_help)
 
 with col_snow:
     st.metric("Neuschnee heute", f"{weather.get('fresh_snow', 0):.0f} cm")
@@ -176,16 +187,20 @@ with st.expander("3-Tages-Wettervorschau"):
                 st.write(f"Wind: {day['wind_max_kmh']:.0f} km/h")
                 st.write(f"{day['temp_min']}° / {day['temp_max']}°C")
 
-# Schneehöhe Verlauf (nur wenn Zeitraum > 1 Tag gewählt)
-if snow_period > 1 and snow_data["history"]:
-    df_snow = pd.DataFrame(snow_data["history"]).rename(
-        columns={"date": "Datum", "hs_cm": "Schneehöhe (cm)"}
-    ).set_index("Datum")
-    with st.expander(f"Schneehöhe letzte {snow_period} Tage (IMIS Median)", expanded=True):
-        st.line_chart(df_snow, y="Schneehöhe (cm)", use_container_width=True)
+# Historische Schneehöhe (Archiv)
+if hist_data["history"]:
+    df_snow = (
+        pd.DataFrame(hist_data["history"])
+        .rename(columns={"date": "Datum", "hs_cm": "Schneehöhe (cm)", "new_snow_cm": "Neuschnee (cm)"})
+        .set_index("Datum")
+    )
+    with st.expander(
+        f"Schneehöhe {snow_start} – {snow_end} (Open-Meteo ERA5 Archiv)", expanded=True
+    ):
+        st.line_chart(df_snow[["Schneehöhe (cm)", "Neuschnee (cm)"]], use_container_width=True)
         st.caption(
-            f"Median aus {len(snow_data['stations'])} nächstgelegenen IMIS-Stationen. "
-            "Bewertung basiert auf dem aktuellsten Messwert."
+            "Schneehöhe (ERA5-Reanalyse, konvertiert aus m → cm) und täglicher Neuschnee. "
+            "Die Empfehlung verwendet den Wert vom Enddatum."
         )
 
 # Lawinenproblem
