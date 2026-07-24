@@ -1,5 +1,6 @@
 import streamlit as st
 import folium
+import pandas as pd
 from streamlit_folium import st_folium
 from backend.fetch_avalanche import get_avalanche_bulletin, get_region_names
 from backend.fetch_weather import get_weather
@@ -52,10 +53,10 @@ def load_weather(region_name: str):
     return get_weather(region_name)
 
 @st.cache_data(ttl=3600)
-def load_snow_height(region_name: str) -> dict:
+def load_snow_height(region_name: str, period_in_days: int = 1) -> dict:
     from backend.fetch_weather import REGION_COORDS
     lat, lon = REGION_COORDS.get(region_name, (46.58119, 7.93440))
-    return get_snow_height(lat, lon)
+    return get_snow_height(lat, lon, period_in_days=period_in_days)
 
 with st.spinner("Lawinenbulletin wird geladen…"):
     regions = load_bulletin()
@@ -99,6 +100,15 @@ with st.sidebar:
     )
 
     st.divider()
+    snow_period = st.radio(
+        "Schneehöhe: Zeitraum",
+        options=[1, 3, 7],
+        format_func=lambda d: {1: "Heute", 3: "3 Tage", 7: "7 Tage"}[d],
+        horizontal=True,
+        help="Wie viele Tage historische IMIS-Schneehöhendaten anzeigen",
+    )
+
+    st.divider()
     if st.button("Daten aktualisieren", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
@@ -108,7 +118,7 @@ with st.sidebar:
 region_data = region_map[selected_region]
 weather = load_weather(selected_region)
 today = weather.get("today", {})
-snow_data = load_snow_height(selected_region)
+snow_data = load_snow_height(selected_region, snow_period)
 hs_cm = snow_data["hs_cm"]
 
 st.subheader(f"Aktuelle Bedingungen – {selected_region}")
@@ -165,6 +175,18 @@ with st.expander("3-Tages-Wettervorschau"):
                 st.write(f"Schnee: {day['snowfall_cm']} cm")
                 st.write(f"Wind: {day['wind_max_kmh']:.0f} km/h")
                 st.write(f"{day['temp_min']}° / {day['temp_max']}°C")
+
+# Schneehöhe Verlauf (nur wenn Zeitraum > 1 Tag gewählt)
+if snow_period > 1 and snow_data["history"]:
+    df_snow = pd.DataFrame(snow_data["history"]).rename(
+        columns={"date": "Datum", "hs_cm": "Schneehöhe (cm)"}
+    ).set_index("Datum")
+    with st.expander(f"Schneehöhe letzte {snow_period} Tage (IMIS Median)", expanded=True):
+        st.line_chart(df_snow, y="Schneehöhe (cm)", use_container_width=True)
+        st.caption(
+            f"Median aus {len(snow_data['stations'])} nächstgelegenen IMIS-Stationen. "
+            "Bewertung basiert auf dem aktuellsten Messwert."
+        )
 
 # Lawinenproblem
 problem = region_data.get("avalanche_problem", "Keine Angabe")

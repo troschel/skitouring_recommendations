@@ -2,9 +2,13 @@
 Snow height data from the SLF IMIS measurement network.
 Uses SNOW_FLAT stations (flat-field sensors) nearest to the region centre.
 API: https://measurement-api.slf.ch
+
+period_in_days: 1, 3, or 7 (API constraint).
 """
 
 import math
+from collections import defaultdict
+
 import requests
 import urllib3
 
@@ -28,49 +32,92 @@ def _haversine_km(lat1, lon1, lat2, lon2) -> float:
     R = 6371
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    a = (math.sin(dlat / 2) ** 2
+         + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2)
     return R * 2 * math.asin(math.sqrt(a))
 
 
-def get_snow_height(lat: float, lon: float, n_stations: int = 5, max_radius_km: float = 60) -> dict:
+def _median(values: list[float]) -> float | None:
+    if not values:
+        return None
+    s = sorted(values)
+    mid = len(s) // 2
+    return s[mid] if len(s) % 2 else (s[mid - 1] + s[mid]) / 2
+
+
+def get_snow_height(
+    lat: float,
+    lon: float,
+    period_in_days: int = 1,
+    n_stations: int = 5,
+    max_radius_km: float = 60,
+) -> dict:
     """
-    Return median snow height (HS, cm) from the n nearest SNOW_FLAT IMIS stations.
+    Return snow height data from the n nearest SNOW_FLAT IMIS stations.
+
+    period_in_days: 1, 3, or 7 (API constraint).
 
     Returns a dict with:
-      hs_cm      — median snow height in cm (None if no data)
-      stations   — list of {code, label, elevation, hs_cm, dist_km} for nearby stations
-      n_with_data — number of stations that returned a valid HS reading
+      hs_cm       — median HS for the most recent date (None if no data)
+      stations    — list of {code, label, elevation, hs_cm, dist_km} (most recent)
+      n_with_data — number of stations with a valid reading on the most recent date
+      history     — list of {date: str, hs_cm: float} sorted ascending (median per day)
+                    only populated when period_in_days > 1
     """
+    period_in_days = period_in_days if period_in_days in (1, 3, 7) else 1
+
     try:
         stations = _get_stations()
-        # Sort by distance to region centre
+
         def dist(s):
             return _haversine_km(lat, lon, s["lat"], s["lon"])
 
         nearby = sorted(stations, key=dist)
         nearby = [s for s in nearby if dist(s) <= max_radius_km][:n_stations]
+        nearby_codes = {s["code"] for s in nearby}
 
         if not nearby:
-            return {"hs_cm": None, "stations": [], "n_with_data": 0}
+            return {"hs_cm": None, "stations": [], "n_with_data": 0, "history": []}
 
-        # Fetch daily snow for all stations (one bulk call)
-        r = requests.get(f"{_BASE}/daily-snow", params={"period_in_days": 1},
-                         timeout=15, verify=False)
+        r = requests.get(
+            f"{_BASE}/daily-snow",
+            params={"period_in_days": period_in_days},
+            timeout=15,
+            verify=False,
+        )
         r.raise_for_status()
         measurements = r.json()
 
-        # Latest HS per station (measurements may contain multiple days)
-        latest: dict[str, float | None] = {}
+        # Group HS values by date across nearby stations
+        by_date: dict[str, list[float]] = defaultdict(list)
+        # Also track latest HS per station (most recent date)
+        latest_by_station: dict[str, tuple[str, float | None]] = {}
+
         for m in measurements:
             code = m["station_code"]
+            if code not in nearby_codes:
+                continue
+            date = m["measure_date"][:10]
             hs = m.get("HS")
-            if code not in latest or (hs is not None and latest[code] is None):
-                latest[code] = hs
+            if hs is not None:
+                by_date[date].append(hs)
+            # Keep the most recent entry per station
+            if code not in latest_by_station or date > latest_by_station[code][0]:
+                latest_by_station[code] = (date, hs)
 
+        # Build history: median HS per day, sorted ascending
+        history = [
+            {"date": d, "hs_cm": round(_median(vals), 1)}
+            for d, vals in sorted(by_date.items())
+            if _median(vals) is not None
+        ]
+
+        # Most-recent-date summary per station
         result_stations = []
-        hs_values = []
+        hs_today = []
         for s in nearby:
-            hs = latest.get(s["code"])
+            entry = latest_by_station.get(s["code"])
+            hs = entry[1] if entry else None
             result_stations.append({
                 "code":      s["code"],
                 "label":     s["label"],
@@ -79,20 +126,15 @@ def get_snow_height(lat: float, lon: float, n_stations: int = 5, max_radius_km: 
                 "dist_km":   round(dist(s), 1),
             })
             if hs is not None:
-                hs_values.append(hs)
-
-        median_hs = None
-        if hs_values:
-            hs_values.sort()
-            mid = len(hs_values) // 2
-            median_hs = hs_values[mid] if len(hs_values) % 2 else (hs_values[mid - 1] + hs_values[mid]) / 2
+                hs_today.append(hs)
 
         return {
-            "hs_cm":       median_hs,
+            "hs_cm":       _median(hs_today),
             "stations":    result_stations,
-            "n_with_data": len(hs_values),
+            "n_with_data": len(hs_today),
+            "history":     history,
         }
 
     except Exception as e:
         print(f"[fetch_snow] Fehler: {e}")
-        return {"hs_cm": None, "stations": [], "n_with_data": 0}
+        return {"hs_cm": None, "stations": [], "n_with_data": 0, "history": []}
