@@ -3,6 +3,7 @@ import folium
 from streamlit_folium import st_folium
 from backend.fetch_avalanche import get_avalanche_bulletin, get_region_names
 from backend.fetch_weather import get_weather
+from backend.fetch_snow import get_snow_height
 from backend.recommender import TourInput, recommend, SKI_DIFFICULTY_INFO, SNOWSHOE_DIFFICULTY_INFO
 from backend.fetch_routes import get_ski_routes, get_snowshoe_routes
 from backend.geometry import get_ski_geometries, get_snow_geometries, lv95_to_wgs84
@@ -49,6 +50,12 @@ def load_bulletin():
 @st.cache_data(ttl=1800)
 def load_weather(region_name: str):
     return get_weather(region_name)
+
+@st.cache_data(ttl=3600)
+def load_snow_height(region_name: str) -> dict:
+    from backend.fetch_weather import REGION_COORDS
+    lat, lon = REGION_COORDS.get(region_name, (46.58119, 7.93440))
+    return get_snow_height(lat, lon)
 
 with st.spinner("Lawinenbulletin wird geladen…"):
     regions = load_bulletin()
@@ -101,10 +108,12 @@ with st.sidebar:
 region_data = region_map[selected_region]
 weather = load_weather(selected_region)
 today = weather.get("today", {})
+snow_data = load_snow_height(selected_region)
+hs_cm = snow_data["hs_cm"]
 
 st.subheader(f"Aktuelle Bedingungen – {selected_region}")
 
-col_av, col_snow, col_wind, col_temp = st.columns(4)
+col_av, col_hs, col_snow, col_wind, col_temp = st.columns(5)
 
 danger_color = region_data["danger_color"]
 danger_level = region_data["danger_level"]
@@ -116,6 +125,23 @@ with col_av:
         f'<div style="background:{danger_color};border-radius:6px;height:8px;"></div>',
         unsafe_allow_html=True,
     )
+
+with col_hs:
+    if hs_cm is not None:
+        hs_label = f"{hs_cm:.0f} cm"
+        hs_help = (
+            f"Median aus {snow_data['n_with_data']} IMIS-Stationen "
+            f"in der Nähe von {selected_region}:\n"
+            + "\n".join(
+                f"• {s['label']} ({s['elevation']:.0f} m, {s['dist_km']} km): "
+                + (f"{s['hs_cm']:.0f} cm" if s['hs_cm'] is not None else "keine Daten")
+                for s in snow_data["stations"]
+            )
+        )
+    else:
+        hs_label = "Keine Daten"
+        hs_help = "Keine IMIS-Stationen in der Nähe liefern aktuell Schneehöhendaten."
+    st.metric("Schneehöhe (IMIS)", hs_label, help=hs_help)
 
 with col_snow:
     st.metric("Neuschnee heute", f"{weather.get('fresh_snow', 0):.0f} cm")
@@ -162,6 +188,7 @@ inp = TourInput(
     difficulty=difficulty,
     max_danger=max_danger,
     activity=activity,
+    snow_height_cm=hs_cm,
 )
 
 result = recommend(inp)
@@ -303,7 +330,7 @@ else:
                 col2.metric("Aufstieg", f"{r['ascent_m']} m" if r["ascent_m"] else "–")
                 col3.metric("Distanz", f"{r['length_km']} km" if r["length_km"] else "–")
                 if r["start"] or r["end"]:
-                    st.write(f"📍 {r['start']} → {r['end']}" if r["start"] != r["end"] else f"📍 {r['start']}")
-                st.write(f"⏱️ {r['time']}" if r["time"] else "")
+                    st.write(f" {r['start']} → {r['end']}" if r["start"] != r["end"] else f" {r['start']}")
+                st.write(f" {r['time']}" if r["time"] else "")
                 if r["url"]:
                     st.markdown(f"[SchweizMobil ↗]({r['url']})")

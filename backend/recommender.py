@@ -21,6 +21,7 @@ class TourInput:
     difficulty:     str       # z.B. "WS", "ZS" oder "WT1", "WT2"
     max_danger:     int       # vom Benutzer gewählte max. Lawinengefahr (1–5)
     activity:       str = "skitouring"  # "skitouring" | "snowshoeing"
+    snow_height_cm: float | None = None  # median HS from nearest IMIS stations
 
 
 @dataclass
@@ -166,6 +167,26 @@ def recommend(inp: TourInput) -> RecommendationResult:
     elif inp.temp_max < -15:
         reasons_neg.append(f"Sehr kalt: {inp.temp_max}°C – Erfrierungsgefahr")
         tips.append("Extremer Kälteschutz zwingend, Finger/Zehen im Auge behalten")
+
+    # ── 7. Schneehöhe (IMIS) ─────────────────────────────────────────────────
+    min_hs = 20 if inp.activity == "snowshoeing" else 30
+    if inp.snow_height_cm is not None:
+        hs = inp.snow_height_cm
+        if hs < min_hs:
+            score -= 45
+            reasons_neg.append(
+                f"Zu wenig Schnee: {hs:.0f} cm (Minimum {min_hs} cm) – Tour nicht empfohlen"
+            )
+            tips.append("Auf schneereichere Regionen oder höhere Lagen ausweichen")
+        elif hs < 60:
+            score -= 10
+            reasons_neg.append(f"Wenig Schnee: {hs:.0f} cm – nur gut eingeschneite Routen wählen")
+        elif hs < 100:
+            score += 5
+            reasons_pos.append(f"Ausreichend Schnee: {hs:.0f} cm")
+        else:
+            score += 12
+            reasons_pos.append(f"Gute Schneelage: {hs:.0f} cm")
 
     # ── Score normalisieren ───────────────────────────────────────────────────
     score = max(0, min(100, score))
