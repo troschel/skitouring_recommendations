@@ -326,7 +326,7 @@ for r in map_routes:
     is_selected = r["fid"] == selected_fid
     folium.PolyLine(
         locations=[[c[1], c[0]] for c in coords],
-        color="#1565C0" if is_selected else "#FF5000",
+        color="#76FF03",
         weight=7 if is_selected else 4,
         opacity=1.0 if is_selected else 0.6,
         tooltip=f"{'→ ' if is_selected else ''}{label} – {r['difficulty']}",
@@ -334,6 +334,13 @@ for r in map_routes:
     ).add_to(m)
 
 folium.LayerControl().add_to(m)
+
+# Zoom to selected route if it has geometry
+if selected_fid and (selected_coords := geom_map.get(selected_fid)):
+    lats = [c[1] for c in selected_coords]
+    lons = [c[0] for c in selected_coords]
+    m.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]], padding=(40, 40))
+
 st_folium(m, use_container_width=True, height=500, returned_objects=[])
 
 st.divider()
