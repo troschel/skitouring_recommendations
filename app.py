@@ -315,18 +315,22 @@ if extra_layer_id:
     folium.TileLayer(wmts(extra_layer_id),
         attr="© swisstopo", name=extra_layer_name, overlay=True).add_to(m)
 
-# Highlighted suggested routes
+selected_fid = st.session_state.get("selected_fid")
+
+# Highlighted suggested routes — selected one on top in blue, others in orange
 for r in map_routes:
     coords = geom_map.get(r["fid"], [])
     if not coords:
         continue
     label = r.get("target") or r.get("name", "")
+    is_selected = r["fid"] == selected_fid
     folium.PolyLine(
-        locations=[[c[1], c[0]] for c in coords],  # folium: [lat, lon]
-        color="#FF5000",
-        weight=4,
-        opacity=0.9,
-        tooltip=f"{label} – {r['difficulty']}",
+        locations=[[c[1], c[0]] for c in coords],
+        color="#1565C0" if is_selected else "#FF5000",
+        weight=7 if is_selected else 4,
+        opacity=1.0 if is_selected else 0.6,
+        tooltip=f"{'→ ' if is_selected else ''}{label} – {r['difficulty']}",
+        z_index_offset=1000 if is_selected else 0,
     ).add_to(m)
 
 folium.LayerControl().add_to(m)
@@ -347,11 +351,17 @@ if activity == "skitouring":
             f"in {selected_region} (sortiert nach Schwierigkeit)"
         )
         for r in routes:
-            with st.expander(f"**{r['target']}** – {r['name']} · {r['difficulty']}"):
-                col1, col2, col3 = st.columns(3)
+            is_sel = r["fid"] == st.session_state.get("selected_fid")
+            label = f"{'▶ ' if is_sel else ''}**{r['target']}** – {r['name']} · {r['difficulty']}"
+            with st.expander(label, expanded=is_sel):
+                col1, col2, col3, col_btn = st.columns([1, 1, 1, 1])
                 col1.metric("Schwierigkeit", r["difficulty"])
                 col2.metric("Aufstieg", f"{r['ascent_m']} m" if r["ascent_m"] else "–")
                 col3.metric("Gipfel", f"{r['target_alt']} m" if r["target_alt"] else "–")
+                btn_label = "Auf Karte ausblenden" if is_sel else "Auf Karte anzeigen"
+                if col_btn.button(btn_label, key=f"sel_{r['fid']}"):
+                    st.session_state["selected_fid"] = None if is_sel else r["fid"]
+                    st.rerun()
                 st.write(f"⏱️ {r['time']}" if r["time"] else "")
                 if r["url"]:
                     st.markdown(f"[SAC Tourenportal ↗]({r['url']})")
@@ -367,12 +377,17 @@ else:
             f"in {selected_region} (sortiert nach Schwierigkeit)"
         )
         for r in routes:
-            label = f"**{r['name']}** · {r['difficulty']} ({r['diff_color']})"
-            with st.expander(label):
-                col1, col2, col3 = st.columns(3)
+            is_sel = r["fid"] == st.session_state.get("selected_fid")
+            label = f"{'▶ ' if is_sel else ''}**{r['name']}** · {r['difficulty']} ({r['diff_color']})"
+            with st.expander(label, expanded=is_sel):
+                col1, col2, col3, col_btn = st.columns([1, 1, 1, 1])
                 col1.metric("Schwierigkeit", f"{r['difficulty']} ({r['diff_color']})")
                 col2.metric("Aufstieg", f"{r['ascent_m']} m" if r["ascent_m"] else "–")
                 col3.metric("Distanz", f"{r['length_km']} km" if r["length_km"] else "–")
+                btn_label = "Auf Karte ausblenden" if is_sel else "Auf Karte anzeigen"
+                if col_btn.button(btn_label, key=f"sel_{r['fid']}"):
+                    st.session_state["selected_fid"] = None if is_sel else r["fid"]
+                    st.rerun()
                 if r["start"] or r["end"]:
                     st.write(f" {r['start']} → {r['end']}" if r["start"] != r["end"] else f" {r['start']}")
                 st.write(f" {r['time']}" if r["time"] else "")
