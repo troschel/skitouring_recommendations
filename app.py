@@ -6,6 +6,7 @@ from streamlit_folium import st_folium
 from backend.fetch_avalanche import get_avalanche_bulletin, get_region_names
 from backend.fetch_weather import get_weather
 from backend.fetch_snow import get_snow_height, get_historical_snow
+from backend.fetch_transport import get_nearest_stop, get_connections, search_stop
 from backend.recommender import TourInput, recommend, SKI_DIFFICULTY_INFO, SNOWSHOE_DIFFICULTY_INFO
 from backend.fetch_routes import get_ski_routes, get_snowshoe_routes
 from backend.geometry import get_ski_geometries, get_snow_geometries, lv95_to_wgs84
@@ -61,6 +62,16 @@ def load_weather(region_name: str):
     return get_weather(region_name)
 
 @st.cache_data(ttl=3600)
+def load_nearest_stop(region_name: str) -> dict | None:
+    from backend.fetch_weather import REGION_COORDS
+    lat, lon = REGION_COORDS.get(region_name, (46.58119, 7.93440))
+    return get_nearest_stop(lat, lon)
+
+@st.cache_data(ttl=300)
+def load_connections(from_stop: str, to_stop: str) -> list[dict]:
+    return get_connections(from_stop, to_stop, limit=5)
+
+@st.cache_data(ttl=3600)
 def load_snow_height(region_name: str) -> dict:
     from backend.fetch_weather import REGION_COORDS
     lat, lon = REGION_COORDS.get(region_name, (46.58119, 7.93440))
@@ -103,6 +114,14 @@ with st.sidebar:
         scale_label,
         options=list(difficulty_info.keys()),
         format_func=lambda k: difficulty_info[k]["label"],
+    )
+
+    st.divider()
+    departure_stop = st.text_input(
+        "Abfahrtsbahnhof (öV)",
+        value="Bern",
+        placeholder="z.B. Zürich HB, Basel SBB, Luzern…",
+        help="Startbahnhof für die Verbindungssuche zum nächsten Halt bei der Region",
     )
 
     max_danger = st.slider(
@@ -400,3 +419,46 @@ else:
                 st.write(f" {r['time']}" if r["time"] else "")
                 if r["url"]:
                     st.markdown(f"[SchweizMobil ↗]({r['url']})")
+
+st.divider()
+
+# ── Öffentlicher Verkehr ────────────────────────────────────────────────────────
+
+st.subheader("Anreise mit öffentlichem Verkehr")
+
+nearest = load_nearest_stop(selected_region)
+
+if nearest:
+    st.caption(
+        f"Nächste Haltestelle bei **{selected_region}**: "
+        f"**{nearest['name']}** ({nearest['distance']} m Luftlinie)"
+    )
+else:
+    st.warning("Keine Haltestelle in der Nähe gefunden.")
+
+if nearest and departure_stop.strip():
+    with st.spinner("Verbindungen werden gesucht…"):
+        connections = load_connections(departure_stop.strip(), nearest["name"])
+
+    if not connections:
+        st.warning(
+            f"Keine Verbindungen von **{departure_stop}** nach **{nearest['name']}** gefunden. "
+            "Bitte Bahnhofnamen prüfen."
+        )
+    else:
+        st.markdown(f"**{departure_stop}** → **{nearest['name']}** – nächste Verbindungen:")
+        cols = st.columns([1, 1, 1, 1, 3])
+        cols[0].markdown("**Abfahrt**")
+        cols[1].markdown("**Ankunft**")
+        cols[2].markdown("**Dauer**")
+        cols[3].markdown("**Umst.**")
+        cols[4].markdown("**Linie(n)**")
+        for c in connections:
+            platform = f" Gl. {c['platform']}" if c["platform"] else ""
+            cols = st.columns([1, 1, 1, 1, 3])
+            cols[0].write(f"{c['departure']}{platform}")
+            cols[1].write(c["arrival"])
+            cols[2].write(c["duration"])
+            cols[3].write(str(c["transfers"]))
+            cols[4].write(c["lines"])
+        st.caption("Quelle: transport.opendata.ch · Echtzeitdaten von SBB/öV Schweiz")
