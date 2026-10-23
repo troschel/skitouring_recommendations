@@ -66,8 +66,8 @@ def load_nearest_stop(lat: float, lon: float) -> dict | None:
     return get_nearest_stop(lat, lon)
 
 @st.cache_data(ttl=300)
-def load_connections(from_stop: str, to_stop: str) -> list[dict]:
-    return get_connections(from_stop, to_stop, limit=5)
+def load_connections(from_stop: str, to_stop: str, travel_date: str, travel_time: str) -> list[dict]:
+    return get_connections(from_stop, to_stop, limit=5, date=travel_date, time=travel_time)
 
 @st.cache_data(ttl=3600)
 def load_snow_height(region_name: str) -> dict:
@@ -445,16 +445,34 @@ else:
     st.warning("Keine Haltestelle in der Nähe gefunden.")
 
 if nearest and departure_stop.strip():
+    col_date, col_time = st.columns(2)
+    travel_date = col_date.date_input(
+        "Reisedatum", value=date.today(), key="travel_date"
+    )
+    travel_time = col_time.time_input(
+        "Abfahrtszeit", value=None, step=300, key="travel_time"
+    )
+
     with st.spinner("Verbindungen werden gesucht…"):
-        connections = load_connections(departure_stop.strip(), nearest["name"])
+        connections = load_connections(
+            departure_stop.strip(),
+            nearest["name"],
+            travel_date.isoformat(),
+            travel_time.strftime("%H:%M") if travel_time else "",
+        )
 
     if not connections:
         st.warning(
             f"Keine Verbindungen von **{departure_stop}** nach **{nearest['name']}** gefunden. "
-            "Bitte Bahnhofnamen prüfen."
+            "Bitte Bahnhofnamen oder Datum prüfen."
         )
     else:
-        st.markdown(f"**{departure_stop}** → **{nearest['name']}** – nächste Verbindungen:")
+        st.markdown(
+            f"**{departure_stop}** → **{nearest['name']}** "
+            f"ab {travel_date.strftime('%d.%m.%Y')}"
+            + (f" {travel_time.strftime('%H:%M')} Uhr" if travel_time else "")
+            + " – nächste Verbindungen:"
+        )
         cols = st.columns([1, 1, 1, 1, 3])
         cols[0].markdown("**Abfahrt**")
         cols[1].markdown("**Ankunft**")

@@ -53,15 +53,27 @@ def search_stop(query: str) -> list[dict]:
     return []
 
 
-def get_connections(from_stop: str, to_stop: str, limit: int = 4) -> list[dict]:
+def get_connections(
+    from_stop: str,
+    to_stop: str,
+    limit: int = 4,
+    date: str | None = None,
+    time: str | None = None,
+) -> list[dict]:
     """
     Return the next `limit` connections from from_stop to to_stop.
+    date: 'YYYY-MM-DD', time: 'HH:MM' — both optional, defaults to now.
     Each entry contains departure, arrival, duration, transfers, and line summary.
     """
     try:
+        params: dict = {"from": from_stop, "to": to_stop, "limit": limit}
+        if date:
+            params["date"] = date
+        if time:
+            params["time"] = time
         r = requests.get(
             f"{_BASE}/connections",
-            params={"from": from_stop, "to": to_stop, "limit": limit},
+            params=params,
             timeout=15,
             verify=False,
         )
