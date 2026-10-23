@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, timedelta
 from streamlit_folium import st_folium
 from backend.fetch_avalanche import get_avalanche_bulletin, get_region_names
-from backend.fetch_weather import get_weather
+from backend.fetch_weather import get_weather, REGION_COORDS as WEATHER_COORDS
 from backend.fetch_snow import get_snow_height, get_historical_snow
 from backend.fetch_transport import get_nearest_stop, get_connections, search_stop
 from backend.recommender import TourInput, recommend, SKI_DIFFICULTY_INFO, SNOWSHOE_DIFFICULTY_INFO
@@ -62,9 +62,7 @@ def load_weather(region_name: str):
     return get_weather(region_name)
 
 @st.cache_data(ttl=3600)
-def load_nearest_stop(region_name: str) -> dict | None:
-    from backend.fetch_weather import REGION_COORDS
-    lat, lon = REGION_COORDS.get(region_name, (46.58119, 7.93440))
+def load_nearest_stop(lat: float, lon: float) -> dict | None:
     return get_nearest_stop(lat, lon)
 
 @st.cache_data(ttl=300)
@@ -73,14 +71,12 @@ def load_connections(from_stop: str, to_stop: str) -> list[dict]:
 
 @st.cache_data(ttl=3600)
 def load_snow_height(region_name: str) -> dict:
-    from backend.fetch_weather import REGION_COORDS
-    lat, lon = REGION_COORDS.get(region_name, (46.58119, 7.93440))
+    lat, lon = WEATHER_COORDS.get(region_name, (46.58119, 7.93440))
     return get_snow_height(lat, lon)
 
 @st.cache_data(ttl=3600)
 def load_historical_snow(region_name: str, start: str, end: str) -> dict:
-    from backend.fetch_weather import REGION_COORDS
-    lat, lon = REGION_COORDS.get(region_name, (46.58119, 7.93440))
+    lat, lon = WEATHER_COORDS.get(region_name, (46.58119, 7.93440))
     return get_historical_snow(lat, lon, start, end)
 
 with st.spinner("Lawinenbulletin wird geladen…"):
@@ -426,11 +422,23 @@ st.divider()
 
 st.subheader("Anreise mit öffentlichem Verkehr")
 
-nearest = load_nearest_stop(selected_region)
+# Use start of selected route when available, otherwise fall back to region centre
+_selected_coords = geom_map.get(selected_fid) if selected_fid else None
+if _selected_coords:
+    _stop_lat, _stop_lon = _selected_coords[0][1], _selected_coords[0][0]
+    _stop_context = next(
+        (r.get("target") or r.get("name", "") for r in map_routes if r["fid"] == selected_fid),
+        selected_region,
+    )
+else:
+    _stop_lat, _stop_lon = WEATHER_COORDS.get(selected_region, (46.58119, 7.93440))
+    _stop_context = selected_region
+
+nearest = load_nearest_stop(_stop_lat, _stop_lon)
 
 if nearest:
     st.caption(
-        f"Nächste Haltestelle bei **{selected_region}**: "
+        f"Nächste Haltestelle bei **{_stop_context}**: "
         f"**{nearest['name']}** ({nearest['distance']} m Luftlinie)"
     )
 else:
